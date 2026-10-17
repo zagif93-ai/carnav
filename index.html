@@ -80,6 +80,8 @@ const FLAG_URL  = "chrome://flags/#enable-experimental-web-platform-features";
 // ==========================================================
 
 const $ = id => document.getElementById(id);
+const DEBUG = new URLSearchParams(location.search).has('debug');   // เปิดด้วย ?debug
+const seen = {};
 const state = {};
 let current = null;
 
@@ -135,6 +137,11 @@ $('start').onclick = async () => {
 
   navigator.bluetooth.addEventListener('advertisementreceived', ev => {
     const name = ev.device.name || ev.name;
+    if (DEBUG) {                      // เก็บทุกอุปกรณ์ไว้แสดงในโหมดตรวจสอบ
+      const mfr = ev.manufacturerData ? [...ev.manufacturerData.keys()].map(k => '0x' + k.toString(16).padStart(4,'0')) : [];
+      const svc = ev.serviceData ? [...ev.serviceData.keys()].map(u => u.slice(4, 8)) : [];
+      seen[ev.device.id] = { name: name || '(ไม่มีชื่อ)', rssi: ev.rssi, mfr, svc, t: Date.now() };
+    }
     if (!name || !BEACONS[name] || ev.rssi == null) return;
     const s = state[name] || (state[name] = { avg: ev.rssi, lastSeen: 0 });
     s.avg = 0.7 * s.avg + 0.3 * ev.rssi;
@@ -152,6 +159,16 @@ function update() {
     lines.push(`${name}: ${Math.round(s.avg)} dBm`);
   }
   $('info').textContent = lines.join('\n');
+
+  if (DEBUG) {                        // แสดง 10 อุปกรณ์ที่สัญญาณแรงสุด
+    const list = Object.values(seen).filter(d => now - d.t < 5000)
+      .sort((a, b) => b.rssi - a.rssi).slice(0, 10)
+      .map(d => `${d.rssi} dBm | ${d.name}` +
+                (d.mfr.length ? ` | mfr ${d.mfr.join(',')}` : '') +
+                (d.svc.length ? ` | svc ${d.svc.join(',')}` : ''));
+    $('info').textContent = '— โหมดตรวจสอบ —\n' + (list.join('\n') || 'ยังไม่เจออุปกรณ์') +
+                            (lines.length ? '\n\n' + lines.join('\n') : '');
+  }
 
   if (current && state[current].avg < RSSI_FAR) current = null;
 
