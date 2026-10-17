@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>นำทางในอาคาร</title>
+<style>
+  body{margin:0;font-family:sans-serif;background:#111;color:#fff;display:flex;
+       flex-direction:column;align-items:center;justify-content:center;height:100vh;text-align:center}
+  #arrow{font-size:40vw;line-height:1}
+  #msg{font-size:11vw;font-weight:bold;margin:10px}
+  #info{color:#999;font-size:14px;white-space:pre-line}
+  .near{background:#0a7d2c}
+  button{font-size:20px;padding:14px 28px;border-radius:12px;border:0;margin-top:20px}
+
+  /* ---- กล่องแจ้งเตือน ---- */
+  #overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;
+           align-items:center;justify-content:center;padding:16px;z-index:10}
+  #box{background:#fff;color:#222;border-radius:16px;padding:24px;max-width:420px;width:100%;text-align:left}
+  #box h2{margin:0 0 12px;font-size:22px}
+  #box p,#box li{font-size:16px;line-height:1.5}
+  #box ol{padding-left:22px;margin:8px 0}
+  #box code{background:#eee;padding:2px 6px;border-radius:6px;word-break:break-all}
+  .row{display:flex;gap:12px;margin-top:16px}
+  .row button{flex:1;margin:0}
+  .yes{background:#0a7d2c;color:#fff}
+  .no{background:#ddd;color:#222}
+  #steps{display:none}
+  #copied{color:#0a7d2c;font-weight:bold}
+</style>
+</head>
+<body>
+<div id="main">
+  <div id="arrow">⬆️</div>
+  <div id="msg">กด "เริ่มนำทาง"</div>
+  <div id="info"></div>
+  <button id="start">เริ่มนำทาง</button>
+</div>
+
+<!-- กล่องแจ้งเตือนให้เปิด flag -->
+<div id="overlay">
+  <div id="box">
+    <div id="ask">
+      <h2>⚠️ กรุณาเปิด flag เพื่อนำทาง</h2>
+      <p>ระบบนำทางต้องใช้ฟีเจอร์สแกน Beacon ของ Chrome ซึ่งยังเป็นฟีเจอร์ทดลอง
+         ต้องเปิดใช้งานก่อน (ทำครั้งเดียวต่อเครื่อง)</p>
+      <div class="row">
+        <button class="no"  id="deny">ไม่อนุญาต</button>
+        <button class="yes" id="allow">อนุญาต</button>
+      </div>
+    </div>
+
+    <div id="steps">
+      <h2>เปิด flag ตามขั้นตอนนี้</h2>
+      <p id="copied">✅ คัดลอกที่อยู่ให้แล้ว</p>
+      <ol>
+        <li>กดที่ช่องที่อยู่เว็บด้านบน แล้ว <b>วาง</b> ข้อความที่คัดลอกไว้ แล้วกด Enter<br>
+            <code>chrome://flags/#enable-experimental-web-platform-features</code></li>
+        <li>ที่ <b>Experimental Web Platform features</b> เปลี่ยนจาก <i>Default</i> เป็น <b>Enabled</b></li>
+        <li>กดปุ่ม <b>Relaunch</b> ด้านล่าง</li>
+        <li>สแกน QR Code อีกครั้งเพื่อเริ่มนำทาง</li>
+      </ol>
+      <div class="row">
+        <button class="no"  id="copyAgain">คัดลอกอีกครั้ง</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== ตั้งค่า: ชื่อ Beacon (ดูจากแอป nRF Connect) → ข้อความ =====
+const BEACONS = {
+  "Holyiot": { msg: "เลี้ยวขวา", arrow: "➡️" },
+  "TURN-2":  { msg: "เลี้ยวซ้าย", arrow: "⬅️" },
+};
+const RSSI_NEAR = -70;   // แรงกว่านี้ = ถึงจุดเลี้ยว (ปรับจากการทดสอบจริง)
+const RSSI_FAR  = -80;   // อ่อนกว่านี้ = ผ่านไปแล้ว
+const LOST_MS   = 3000;  // ไม่เห็นนานเกินนี้ = ไกล
+const FLAG_URL  = "chrome://flags/#enable-experimental-web-platform-features";
+// ==========================================================
+
+const $ = id => document.getElementById(id);
+const state = {};
+let current = null;
+
+// ---------- เช็คว่าเปิด flag แล้วหรือยัง ----------
+const supported = !!(navigator.bluetooth && navigator.bluetooth.requestLEScan);
+if (!supported) $('overlay').style.display = 'flex';
+
+async function copyFlag() {
+  try {
+    await navigator.clipboard.writeText(FLAG_URL);
+  } catch (e) {                       // สำรอง กรณี clipboard API ใช้ไม่ได้
+    const t = document.createElement('textarea');
+    t.value = FLAG_URL; document.body.appendChild(t); t.select();
+    document.execCommand('copy'); t.remove();
+  }
+}
+
+$('allow').onclick = async () => {
+  await copyFlag();
+  $('ask').style.display = 'none';
+  $('steps').style.display = 'block';
+};
+$('copyAgain').onclick = async () => {
+  await copyFlag();
+  $('copied').textContent = '✅ คัดลอกให้อีกครั้งแล้ว';
+};
+
+$('deny').onclick = () => {
+  window.close();                     // ปิดได้เฉพาะบางกรณี
+  setTimeout(() => {                  // ถ้าปิดไม่ได้ ให้เคลียร์หน้าแทน
+    document.body.innerHTML =
+      '<div style="padding:24px"><h2>ยกเลิกการนำทางแล้ว</h2>' +
+      '<p style="color:#aaa">คุณสามารถปิดแท็บนี้ได้เลย</p></div>';
+  }, 300);
+};
+
+// ---------- ระบบนำทาง ----------
+function speak(t){ const u = new SpeechSynthesisUtterance(t); u.lang = 'th-TH'; speechSynthesis.speak(u); }
+
+$('start').onclick = async () => {
+  if (!supported) { $('overlay').style.display = 'flex'; return; }
+  try {
+    await navigator.bluetooth.requestLEScan({ acceptAllAdvertisements: true, keepRepeatedDevices: true });
+  } catch (e) {
+    $('msg').textContent = 'เริ่มสแกนไม่ได้';
+    $('info').textContent = e.message + '\n(เปิด Bluetooth + Location แล้วกดอนุญาต)';
+    return;
+  }
+  $('start').style.display = 'none';
+  $('msg').textContent = 'ตรงไปเรื่อยๆ';
+  try { if ('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch (e) {}
+  speak('เริ่มนำทาง');
+
+  navigator.bluetooth.addEventListener('advertisementreceived', ev => {
+    const name = ev.device.name || ev.name;
+    if (!name || !BEACONS[name] || ev.rssi == null) return;
+    const s = state[name] || (state[name] = { avg: ev.rssi, lastSeen: 0 });
+    s.avg = 0.7 * s.avg + 0.3 * ev.rssi;
+    s.lastSeen = Date.now();
+  });
+
+  setInterval(update, 300);
+};
+
+function update() {
+  const now = Date.now();
+  const lines = [];
+  for (const [name, s] of Object.entries(state)) {
+    if (now - s.lastSeen > LOST_MS) s.avg = -100;
+    lines.push(`${name}: ${Math.round(s.avg)} dBm`);
+  }
+  $('info').textContent = lines.join('\n');
+
+  if (current && state[current].avg < RSSI_FAR) current = null;
+
+  if (!current) {
+    let best = null;
+    for (const [name, s] of Object.entries(state))
+      if (s.avg > RSSI_NEAR && (!best || s.avg > state[best].avg)) best = name;
+    if (best) {
+      current = best;
+      speak(BEACONS[best].msg);
+      if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+    }
+  }
+
+  document.body.classList.toggle('near', !!current);
+  $('arrow').textContent = current ? BEACONS[current].arrow : '⬆️';
+  $('msg').textContent   = current ? BEACONS[current].msg   : 'ตรงไปเรื่อยๆ';
+}
+</script>
+</body>
+</html>
