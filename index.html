@@ -3,26 +3,48 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>นำทางในอาคาร</title>
+<title>ที่จอดรถ</title>
 <style>
-  body{margin:0;font-family:sans-serif;background:#111;color:#fff;display:flex;
-       flex-direction:column;align-items:center;justify-content:center;height:100vh;text-align:center}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:sans-serif;background:#111;color:#fff}
+  .screen{display:none;min-height:100vh;padding:16px}
+  .screen.on{display:flex;flex-direction:column}
+
+  /* ---- หน้าเลือกชั้น ---- */
+  #select h1{font-size:26px;margin:8px 0 4px}
+  #select .sub{color:#999;margin-bottom:16px}
+  .floor{background:#222;border-radius:16px;padding:18px;margin-bottom:14px;border:2px solid #333;cursor:pointer}
+  .floor.full{opacity:.45;cursor:not-allowed}
+  .floor .top{display:flex;justify-content:space-between;align-items:center}
+  .floor .name{font-size:24px;font-weight:bold}
+  .floor .free{font-size:20px;font-weight:bold;color:#3ddc6a}
+  .floor.full .free{color:#ff6b6b}
+  .dots{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .dot{width:34px;height:22px;border-radius:5px;background:#2e8b45}
+  .dot.taken{background:#8b2e2e}
+  #updated{color:#777;font-size:13px;text-align:center;margin-top:auto}
+
+  /* ---- หน้านำทาง ---- */
+  #nav{align-items:center;justify-content:center;text-align:center}
+  #nav.near{background:#0a7d2c}
+  #dest{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-content:space-between;
+        align-items:center;font-size:16px;color:#ccc}
+  #dest button{font-size:15px;padding:8px 14px;border-radius:10px;border:0}
   #arrow{font-size:40vw;line-height:1}
   #msg{font-size:11vw;font-weight:bold;margin:10px}
-  #info{color:#999;font-size:14px;white-space:pre-line}
-  .near{background:#0a7d2c}
-  button{font-size:20px;padding:14px 28px;border-radius:12px;border:0;margin-top:20px}
+  #warn{color:#ffb74d;font-weight:bold;min-height:22px}
+  #info{color:#999;font-size:13px;white-space:pre-line}
 
-  /* ---- กล่องแจ้งเตือน ---- */
+  /* ---- กล่องแจ้งเตือน flag ---- */
   #overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;
            align-items:center;justify-content:center;padding:16px;z-index:10}
-  #box{background:#fff;color:#222;border-radius:16px;padding:24px;max-width:420px;width:100%;text-align:left}
+  #box{background:#fff;color:#222;border-radius:16px;padding:24px;max-width:420px;width:100%}
   #box h2{margin:0 0 12px;font-size:22px}
   #box p,#box li{font-size:16px;line-height:1.5}
   #box ol{padding-left:22px;margin:8px 0}
   #box code{background:#eee;padding:2px 6px;border-radius:6px;word-break:break-all}
   .row{display:flex;gap:12px;margin-top:16px}
-  .row button{flex:1;margin:0}
+  .row button{flex:1;font-size:18px;padding:12px;border-radius:12px;border:0}
   .yes{background:#0a7d2c;color:#fff}
   .no{background:#ddd;color:#222}
   #steps{display:none}
@@ -30,14 +52,25 @@
 </style>
 </head>
 <body>
-<div id="main">
-  <div id="arrow">⬆️</div>
-  <div id="msg">กด "เริ่มนำทาง"</div>
-  <div id="info"></div>
-  <button id="start">เริ่มนำทาง</button>
+
+<!-- ===== หน้า 1: เลือกชั้น ===== -->
+<div id="select" class="screen on">
+  <h1>🅿️ เลือกชั้นที่ต้องการจอด</h1>
+  <div class="sub">แตะที่ชั้นเพื่อเริ่มนำทาง</div>
+  <div id="floors">กำลังโหลดข้อมูล...</div>
+  <div id="updated"></div>
 </div>
 
-<!-- กล่องแจ้งเตือนให้เปิด flag -->
+<!-- ===== หน้า 2: นำทาง ===== -->
+<div id="nav" class="screen">
+  <div id="dest"><span id="destText"></span><button id="back">เปลี่ยนชั้น</button></div>
+  <div id="arrow">⬆️</div>
+  <div id="msg">ตรงไปเรื่อยๆ</div>
+  <div id="warn"></div>
+  <div id="info"></div>
+</div>
+
+<!-- ===== กล่องแจ้งเตือน flag ===== -->
 <div id="overlay">
   <div id="box">
     <div id="ask">
@@ -49,144 +82,199 @@
         <button class="yes" id="allow">อนุญาต</button>
       </div>
     </div>
-
     <div id="steps">
       <h2>เปิด flag ตามขั้นตอนนี้</h2>
       <p id="copied">✅ คัดลอกที่อยู่ให้แล้ว</p>
       <ol>
-        <li>กดที่ช่องที่อยู่เว็บด้านบน แล้ว <b>วาง</b> ข้อความที่คัดลอกไว้ แล้วกด Enter<br>
+        <li>กดที่ช่องที่อยู่เว็บด้านบน แล้ว <b>วาง</b> แล้วกด Enter<br>
             <code>chrome://flags/#enable-experimental-web-platform-features</code></li>
-        <li>ที่ <b>Experimental Web Platform features</b> เปลี่ยนจาก <i>Default</i> เป็น <b>Enabled</b></li>
+        <li>เปลี่ยนจาก <i>Default</i> เป็น <b>Enabled</b></li>
         <li>กดปุ่ม <b>Relaunch</b> ด้านล่าง</li>
-        <li>สแกน QR Code อีกครั้งเพื่อเริ่มนำทาง</li>
+        <li>สแกน QR Code อีกครั้ง</li>
       </ol>
-      <div class="row">
-        <button class="no"  id="copyAgain">คัดลอกอีกครั้ง</button>
-      </div>
+      <div class="row"><button class="no" id="copyAgain">คัดลอกอีกครั้ง</button></div>
     </div>
   </div>
 </div>
 
 <script>
-// ===== ตั้งค่า: ชื่อ Beacon (ดูจากแอป nRF Connect) → ข้อความ =====
-const BEACONS = {
-  "Holy-IOT": { msg: "รักคุณ", arrow: "➡️" },
-  "TURN-2":  { msg: "เลี้ยวซ้าย", arrow: "⬅️" },
+// =================== ตั้งค่า ===================
+// URL ของ Firebase Realtime Database (ไม่มี / ท้าย)
+const FIREBASE_URL = "https://smart-parking-e512d-default-rtdb.asia-southeast1.firebasedatabase.app";
+
+// เส้นทาง: ชื่อ Beacon → { รหัสชั้น: ข้อความที่จะแสดงเมื่อไปชั้นนั้น }
+// Beacon ที่ไม่ได้ระบุชั้นไหนไว้ จะไม่แสดงอะไรเมื่อเลือกชั้นนั้น
+const ROUTES = {
+  "BEA01": {
+    "F1": { msg: "เลี้ยวขวา",          arrow: "➡️" },
+    "F2": { msg: "ตรงไป ขึ้นทางลาด",   arrow: "⬆️" },
+  },
+  "B2": {
+    "F2": { msg: "เลี้ยวซ้าย",          arrow: "⬅️" },
+  },
+  "B3": {
+    "F1": { msg: "ถึงโซนจอดชั้น 1",     arrow: "🅿️" },
+  },
 };
-const RSSI_NEAR = -70;   // แรงกว่านี้ = ถึงจุดเลี้ยว (ปรับจากการทดสอบจริง)
-const RSSI_FAR  = -90;   // อ่อนกว่านี้ = ผ่านไปแล้ว
-const LOST_MS   = 3000;  // ไม่เห็นนานเกินนี้ = ไกล
+
+const RSSI_NEAR = -70;   // แรงกว่านี้ = ถึงจุดเลี้ยว
+const RSSI_FAR  = -80;   // อ่อนกว่านี้ = ผ่านไปแล้ว
+const LOST_MS   = 3000;
+const POLL_MS   = 3000;  // ดึงข้อมูลช่องว่างทุก 3 วินาที
 const FLAG_URL  = "chrome://flags/#enable-experimental-web-platform-features";
-// ==========================================================
+// ===============================================
 
 const $ = id => document.getElementById(id);
-const DEBUG = new URLSearchParams(location.search).has('debug');   // เปิดด้วย ?debug
-const seen = {};
-const state = {};
+const DEBUG = new URLSearchParams(location.search).has('debug');
+const supported = !!(navigator.bluetooth && navigator.bluetooth.requestLEScan);
+
+let parking = {};          // ข้อมูลจาก Firebase
+let selected = null;       // รหัสชั้นที่เลือก เช่น "F1"
+let scanning = false;
+const state = {}, seen = {};
 let current = null;
 
-// ---------- เช็คว่าเปิด flag แล้วหรือยัง ----------
-const supported = !!(navigator.bluetooth && navigator.bluetooth.requestLEScan);
-if (!supported) $('overlay').style.display = 'flex';
-
-async function copyFlag() {
+// ---------- ข้อมูลช่องจอด ----------
+async function loadParking() {
   try {
-    await navigator.clipboard.writeText(FLAG_URL);
-  } catch (e) {                       // สำรอง กรณี clipboard API ใช้ไม่ได้
+    const r = await fetch(FIREBASE_URL + "/parking.json", { cache: "no-store" });
+    parking = (await r.json()) || {};
+    renderFloors();
+    if (parking.updated)
+      $('updated').textContent = 'อัปเดตล่าสุด ' + new Date(parking.updated).toLocaleTimeString('th-TH');
+  } catch (e) {
+    $('floors').textContent = 'โหลดข้อมูลไม่ได้ (ตรวจสอบอินเทอร์เน็ต)';
+  }
+  updateDest();
+}
+
+function floorIds() { return Object.keys(parking).filter(k => parking[k] && parking[k].slots).sort(); }
+function freeCount(id) { return parking[id].slots.filter(s => !s).length; }
+
+function renderFloors() {
+  const ids = floorIds();
+  if (!ids.length) { $('floors').textContent = 'ยังไม่มีข้อมูลจาก ESP32'; return; }
+  $('floors').innerHTML = '';
+  for (const id of ids) {
+    const f = parking[id], free = freeCount(id), total = f.slots.length;
+    const div = document.createElement('div');
+    div.className = 'floor' + (free === 0 ? ' full' : '');
+    div.innerHTML =
+      `<div class="top"><span class="name">${f.name || id}</span>` +
+      `<span class="free">${free === 0 ? 'เต็ม' : 'ว่าง ' + free + '/' + total}</span></div>` +
+      `<div class="dots">${f.slots.map(s => `<div class="dot${s ? ' taken' : ''}"></div>`).join('')}</div>`;
+    if (free > 0) div.onclick = () => chooseFloor(id);
+    $('floors').appendChild(div);
+  }
+}
+
+function updateDest() {
+  if (!selected || !parking[selected]) return;
+  const free = freeCount(selected);
+  $('destText').textContent = `ปลายทาง: ${parking[selected].name || selected} (ว่าง ${free})`;
+  $('warn').textContent = free === 0 ? '⚠️ ชั้นนี้เต็มแล้ว กรุณาเปลี่ยนชั้น' : '';
+}
+
+// ---------- เลือกชั้น → นำทาง ----------
+async function chooseFloor(id) {
+  if (!supported) { $('overlay').style.display = 'flex'; return; }
+  selected = id; current = null;
+  if (!scanning) {
+    try {
+      await navigator.bluetooth.requestLEScan({ acceptAllAdvertisements: true, keepRepeatedDevices: true });
+    } catch (e) {
+      alert('เริ่มสแกนไม่ได้: ' + e.message + '\nกรุณาเปิด Bluetooth และ Location แล้วลองใหม่');
+      return;
+    }
+    navigator.bluetooth.addEventListener('advertisementreceived', onAdv);
+    setInterval(update, 300);
+    try { if ('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch (e) {}
+    scanning = true;
+  }
+  $('select').classList.remove('on');
+  $('nav').classList.add('on');
+  updateDest();
+  speak('เริ่มนำทางไป' + (parking[id].name || ''));
+}
+
+$('back').onclick = () => {
+  selected = null; current = null;
+  $('nav').classList.remove('on', 'near');
+  $('select').classList.add('on');
+};
+
+function speak(t) { const u = new SpeechSynthesisUtterance(t); u.lang = 'th-TH'; speechSynthesis.speak(u); }
+
+function onAdv(ev) {
+  const name = ev.device.name || ev.name;
+  if (DEBUG) {
+    const mfr = [];
+    if (ev.manufacturerData) ev.manufacturerData.forEach((dv, k) => {
+      const bytes = [...new Uint8Array(dv.buffer)].map(b => b.toString(16).padStart(2, '0')).join('');
+      mfr.push('0x' + k.toString(16).padStart(4, '0') + ':' + bytes);
+    });
+    seen[ev.device.id] = { name: name || '(ไม่มีชื่อ)', rssi: ev.rssi, mfr, t: Date.now() };
+  }
+  if (!name || !ROUTES[name] || ev.rssi == null) return;
+  const s = state[name] || (state[name] = { avg: ev.rssi, lastSeen: 0 });
+  s.avg = 0.7 * s.avg + 0.3 * ev.rssi;
+  s.lastSeen = Date.now();
+}
+
+function update() {
+  if (!selected) return;
+  const now = Date.now();
+  for (const s of Object.values(state)) if (now - s.lastSeen > LOST_MS) s.avg = -100;
+
+  if (current && state[current].avg < RSSI_FAR) current = null;
+  if (!current) {
+    let best = null;
+    for (const [name, s] of Object.entries(state)) {
+      if (!ROUTES[name][selected]) continue;             // beacon นี้ไม่เกี่ยวกับชั้นที่เลือก
+      if (s.avg > RSSI_NEAR && (!best || s.avg > state[best].avg)) best = name;
+    }
+    if (best) {
+      current = best;
+      speak(ROUTES[best][selected].msg);
+      if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+    }
+  }
+
+  const step = current ? ROUTES[current][selected] : null;
+  $('nav').classList.toggle('near', !!step);
+  $('arrow').textContent = step ? step.arrow : '⬆️';
+  $('msg').textContent   = step ? step.msg   : 'ตรงไปเรื่อยๆ';
+
+  if (DEBUG) {
+    const list = Object.values(seen).filter(d => now - d.t < 5000)
+      .sort((a, b) => b.rssi - a.rssi).slice(0, 8)
+      .map(d => `${d.rssi} dBm | ${d.name}` + (d.mfr.length ? ' | ' + d.mfr.join(' ') : ''));
+    $('info').textContent = '— โหมดตรวจสอบ —\n' + (list.join('\n') || 'ยังไม่เจออุปกรณ์');
+  }
+}
+
+// ---------- กล่องแจ้งเตือน flag ----------
+async function copyFlag() {
+  try { await navigator.clipboard.writeText(FLAG_URL); }
+  catch (e) {
     const t = document.createElement('textarea');
     t.value = FLAG_URL; document.body.appendChild(t); t.select();
     document.execCommand('copy'); t.remove();
   }
 }
-
-$('allow').onclick = async () => {
-  await copyFlag();
-  $('ask').style.display = 'none';
-  $('steps').style.display = 'block';
-};
-$('copyAgain').onclick = async () => {
-  await copyFlag();
-  $('copied').textContent = '✅ คัดลอกให้อีกครั้งแล้ว';
-};
-
+$('allow').onclick = async () => { await copyFlag(); $('ask').style.display = 'none'; $('steps').style.display = 'block'; };
+$('copyAgain').onclick = async () => { await copyFlag(); $('copied').textContent = '✅ คัดลอกให้อีกครั้งแล้ว'; };
 $('deny').onclick = () => {
-  window.close();                     // ปิดได้เฉพาะบางกรณี
-  setTimeout(() => {                  // ถ้าปิดไม่ได้ ให้เคลียร์หน้าแทน
-    document.body.innerHTML =
-      '<div style="padding:24px"><h2>ยกเลิกการนำทางแล้ว</h2>' +
+  window.close();
+  setTimeout(() => {
+    document.body.innerHTML = '<div style="padding:24px"><h2>ยกเลิกการนำทางแล้ว</h2>' +
       '<p style="color:#aaa">คุณสามารถปิดแท็บนี้ได้เลย</p></div>';
   }, 300);
 };
 
-// ---------- ระบบนำทาง ----------
-function speak(t){ const u = new SpeechSynthesisUtterance(t); u.lang = 'th-TH'; speechSynthesis.speak(u); }
-
-$('start').onclick = async () => {
-  if (!supported) { $('overlay').style.display = 'flex'; return; }
-  try {
-    await navigator.bluetooth.requestLEScan({ acceptAllAdvertisements: true, keepRepeatedDevices: true });
-  } catch (e) {
-    $('msg').textContent = 'เริ่มสแกนไม่ได้';
-    $('info').textContent = e.message + '\n(เปิด Bluetooth + Location แล้วกดอนุญาต)';
-    return;
-  }
-  $('start').style.display = 'none';
-  $('msg').textContent = 'ตรงไปเรื่อยๆ';
-  try { if ('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch (e) {}
-  speak('เริ่มนำทาง');
-
-  navigator.bluetooth.addEventListener('advertisementreceived', ev => {
-    const name = ev.device.name || ev.name;
-    if (DEBUG) {                      // เก็บทุกอุปกรณ์ไว้แสดงในโหมดตรวจสอบ
-      const mfr = ev.manufacturerData ? [...ev.manufacturerData.keys()].map(k => '0x' + k.toString(16).padStart(4,'0')) : [];
-      const svc = ev.serviceData ? [...ev.serviceData.keys()].map(u => u.slice(4, 8)) : [];
-      seen[ev.device.id] = { name: name || '(ไม่มีชื่อ)', rssi: ev.rssi, mfr, svc, t: Date.now() };
-    }
-    if (!name || !BEACONS[name] || ev.rssi == null) return;
-    const s = state[name] || (state[name] = { avg: ev.rssi, lastSeen: 0 });
-    s.avg = 0.7 * s.avg + 0.3 * ev.rssi;
-    s.lastSeen = Date.now();
-  });
-
-  setInterval(update, 300);
-};
-
-function update() {
-  const now = Date.now();
-  const lines = [];
-  for (const [name, s] of Object.entries(state)) {
-    if (now - s.lastSeen > LOST_MS) s.avg = -100;
-    lines.push(`${name}: ${Math.round(s.avg)} dBm`);
-  }
-  $('info').textContent = lines.join('\n');
-
-  if (DEBUG) {                        // แสดง 10 อุปกรณ์ที่สัญญาณแรงสุด
-    const list = Object.values(seen).filter(d => now - d.t < 5000)
-      .sort((a, b) => b.rssi - a.rssi).slice(0, 10)
-      .map(d => `${d.rssi} dBm | ${d.name}` +
-                (d.mfr.length ? ` | mfr ${d.mfr.join(',')}` : '') +
-                (d.svc.length ? ` | svc ${d.svc.join(',')}` : ''));
-    $('info').textContent = '— โหมดตรวจสอบ —\n' + (list.join('\n') || 'ยังไม่เจออุปกรณ์') +
-                            (lines.length ? '\n\n' + lines.join('\n') : '');
-  }
-
-  if (current && state[current].avg < RSSI_FAR) current = null;
-
-  if (!current) {
-    let best = null;
-    for (const [name, s] of Object.entries(state))
-      if (s.avg > RSSI_NEAR && (!best || s.avg > state[best].avg)) best = name;
-    if (best) {
-      current = best;
-      speak(BEACONS[best].msg);
-      if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
-    }
-  }
-
-  document.body.classList.toggle('near', !!current);
-  $('arrow').textContent = current ? BEACONS[current].arrow : '⬆️';
-  $('msg').textContent   = current ? BEACONS[current].msg   : 'ตรงไปเรื่อยๆ';
-}
+if (!supported) $('overlay').style.display = 'flex';
+loadParking();
+setInterval(loadParking, POLL_MS);
 </script>
 </body>
 </html>
