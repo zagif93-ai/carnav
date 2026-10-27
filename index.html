@@ -2,279 +2,273 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ที่จอดรถ</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0e1116">
+<title>Smart Parking</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  *{box-sizing:border-box}
-  body{margin:0;font-family:sans-serif;background:#111;color:#fff}
-  .screen{display:none;min-height:100vh;padding:16px}
-  .screen.on{display:flex;flex-direction:column}
+  :root{
+    --bg:#0e1116; --panel:#171b22; --panel-2:#1e232c; --line:#2a313c;
+    --text:#eef1f5; --muted:#8b95a5;
+    --free:#2fbf71; --free-dim:#1c4a33;
+    --taken:#e5534b; --taken-dim:#4d2523;
+    --warn:#f0a83a; --unknown:#3a414c;
+    --accent:#4c8dff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg)}
+  body{font-family:'IBM Plex Sans Thai',sans-serif;color:var(--text);min-height:100vh;
+       padding:16px 16px calc(110px + env(safe-area-inset-bottom))}
+  .wrap{max-width:560px;margin:0 auto}
 
-  /* ---- หน้าเลือกชั้น ---- */
-  #select h1{font-size:26px;margin:8px 0 4px}
-  #select .sub{color:#999;margin-bottom:16px}
-  .floor{background:#222;border-radius:16px;padding:18px;margin-bottom:14px;border:2px solid #333;cursor:pointer}
-  .floor.full{opacity:.45;cursor:not-allowed}
-  .floor .top{display:flex;justify-content:space-between;align-items:center}
-  .floor .name{font-size:24px;font-weight:bold}
-  .floor .free{font-size:20px;font-weight:bold;color:#3ddc6a}
-  .floor.full .free{color:#ff6b6b}
-  .dots{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
-  .dot{width:34px;height:22px;border-radius:5px;background:#2e8b45}
-  .dot.taken{background:#8b2e2e}
-  #updated{color:#777;font-size:13px;text-align:center;margin-top:auto}
+  /* ---------- ส่วนหัว ---------- */
+  header{display:flex;align-items:center;justify-content:space-between;margin:4px 0 18px}
+  .brand{display:flex;align-items:center;gap:10px}
+  .logo{width:38px;height:38px;border-radius:10px;background:var(--accent);display:grid;place-items:center;
+        font-weight:700;font-size:22px;color:#fff}
+  .brand h1{font-size:19px;font-weight:700;line-height:1.1}
+  .brand small{display:block;color:var(--muted);font-size:13px;font-weight:400}
+  .live{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+  .live i{width:8px;height:8px;border-radius:50%;background:var(--free);box-shadow:0 0 0 0 rgba(47,191,113,.6);
+          animation:pulse 2s infinite}
+  .live.off i{background:var(--taken);animation:none}
+  @keyframes pulse{70%{box-shadow:0 0 0 7px rgba(47,191,113,0)}100%{box-shadow:0 0 0 0 rgba(47,191,113,0)}}
 
-  /* ---- หน้านำทาง ---- */
-  #nav{align-items:center;justify-content:center;text-align:center}
-  #nav.near{background:#0a7d2c}
-  #dest{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-content:space-between;
-        align-items:center;font-size:16px;color:#ccc}
-  #dest button{font-size:15px;padding:8px 14px;border-radius:10px;border:0}
-  #arrow{font-size:40vw;line-height:1}
-  #msg{font-size:11vw;font-weight:bold;margin:10px}
-  #warn{color:#ffb74d;font-weight:bold;min-height:22px}
-  #info{color:#999;font-size:13px;white-space:pre-line}
+  /* ---------- สรุปรวม ---------- */
+  .summary{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px 20px;margin-bottom:14px}
+  .summary .label{color:var(--muted);font-size:14px}
+  .summary .big{display:flex;align-items:baseline;gap:8px;margin:2px 0 12px}
+  .summary .big b{font-size:44px;font-weight:700;color:var(--free);line-height:1}
+  .summary .big span{color:var(--muted);font-size:16px}
+  .bar{height:8px;background:var(--taken-dim);border-radius:99px;overflow:hidden}
+  .bar > div{height:100%;background:var(--free);border-radius:99px;transition:width .5s}
 
-  /* ---- กล่องแจ้งเตือน flag ---- */
-  #overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;
-           align-items:center;justify-content:center;padding:16px;z-index:10}
-  #box{background:#fff;color:#222;border-radius:16px;padding:24px;max-width:420px;width:100%}
-  #box h2{margin:0 0 12px;font-size:22px}
-  #box p,#box li{font-size:16px;line-height:1.5}
-  #box ol{padding-left:22px;margin:8px 0}
-  #box code{background:#eee;padding:2px 6px;border-radius:6px;word-break:break-all}
-  .row{display:flex;gap:12px;margin-top:16px}
-  .row button{flex:1;font-size:18px;padding:12px;border-radius:12px;border:0}
-  .yes{background:#0a7d2c;color:#fff}
-  .no{background:#ddd;color:#222}
-  #steps{display:none}
-  #copied{color:#0a7d2c;font-weight:bold}
+  /* ---------- คำแนะนำ ---------- */
+  .hint{display:flex;gap:10px;align-items:center;background:rgba(76,141,255,.12);border:1px solid rgba(76,141,255,.35);
+        color:#cfe0ff;border-radius:14px;padding:12px 14px;font-size:15px;font-weight:500;margin-bottom:16px}
+  .hint svg{flex:none}
+
+  /* ---------- การ์ดชั้น ---------- */
+  .floors{display:flex;flex-direction:column;gap:12px}
+  .floor{background:var(--panel);border:2px solid var(--line);border-radius:18px;padding:16px;cursor:pointer;
+         transition:border-color .15s,transform .1s;-webkit-tap-highlight-color:transparent}
+  .floor:active{transform:scale(.99)}
+  .floor.selected{border-color:var(--accent);background:var(--panel-2)}
+  .floor.disabled{cursor:not-allowed;opacity:.55}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .fname{display:flex;align-items:center;gap:10px}
+  .badge{width:42px;height:42px;border-radius:12px;background:var(--panel-2);border:1px solid var(--line);
+         display:grid;place-items:center;font-weight:700;font-size:18px}
+  .floor.selected .badge{background:var(--accent);border-color:var(--accent)}
+  .fname h2{font-size:18px;font-weight:600}
+  .status{font-size:13px;font-weight:600;padding:2px 9px;border-radius:99px;display:inline-block;margin-top:2px}
+  .s-free{background:var(--free-dim);color:var(--free)}
+  .s-low{background:rgba(240,168,58,.15);color:var(--warn)}
+  .s-full{background:var(--taken-dim);color:var(--taken)}
+  .s-none{background:var(--unknown);color:var(--muted)}
+  .count{text-align:right}
+  .count b{font-size:30px;font-weight:700;line-height:1}
+  .count span{color:var(--muted);font-size:14px}
+  .count small{display:block;color:var(--muted);font-size:12px}
+
+  .slots{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:14px}
+  .slot{height:30px;border-radius:7px;display:grid;place-items:center;font-size:12px;font-weight:600}
+  .slot.free{background:var(--free-dim);color:var(--free);border:1px solid rgba(47,191,113,.4)}
+  .slot.taken{background:var(--taken-dim);color:#f3a29d}
+  .slot.unknown{background:var(--unknown);color:var(--muted)}
+  .offline{color:var(--warn);font-size:13px;margin-top:10px}
+
+  .legend{display:flex;gap:16px;justify-content:center;color:var(--muted);font-size:13px;margin:18px 0 6px}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+  .updated{text-align:center;color:var(--muted);font-size:12px}
+
+  /* ---------- แถบปุ่มด้านล่าง ---------- */
+  .cta{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+       background:linear-gradient(to top,var(--bg) 70%,rgba(14,17,22,0))}
+  .cta button{display:block;width:100%;max-width:560px;margin:0 auto;border:0;border-radius:16px;padding:17px;
+              font:600 18px 'IBM Plex Sans Thai',sans-serif;background:var(--accent);color:#fff;cursor:pointer}
+  .cta button:disabled{background:var(--panel-2);color:var(--muted);cursor:default}
+
+  .toast{position:fixed;left:50%;top:16px;transform:translate(-50%,-80px);background:var(--warn);color:#1a1200;
+         padding:10px 16px;border-radius:12px;font-weight:600;font-size:14px;transition:transform .3s;z-index:5;
+         max-width:calc(100% - 32px)}
+  .toast.show{transform:translate(-50%,0)}
 </style>
 </head>
 <body>
-
-<!-- ===== หน้า 1: เลือกชั้น ===== -->
-<div id="select" class="screen on">
-  <h1>🅿️ เลือกชั้นที่ต้องการจอด</h1>
-  <div class="sub">แตะที่ชั้นเพื่อเริ่มนำทาง</div>
-  <div id="floors">กำลังโหลดข้อมูล...</div>
-  <div id="updated"></div>
-</div>
-
-<!-- ===== หน้า 2: นำทาง ===== -->
-<div id="nav" class="screen">
-  <div id="dest"><span id="destText"></span><button id="back">เปลี่ยนชั้น</button></div>
-  <div id="arrow">⬆️</div>
-  <div id="msg">ตรงไปเรื่อยๆ</div>
-  <div id="warn"></div>
-  <div id="info"></div>
-</div>
-
-<!-- ===== กล่องแจ้งเตือน flag ===== -->
-<div id="overlay">
-  <div id="box">
-    <div id="ask">
-      <h2>⚠️ กรุณาเปิด flag เพื่อนำทาง</h2>
-      <p>ระบบนำทางต้องใช้ฟีเจอร์สแกน Beacon ของ Chrome ซึ่งยังเป็นฟีเจอร์ทดลอง
-         ต้องเปิดใช้งานก่อน (ทำครั้งเดียวต่อเครื่อง)</p>
-      <div class="row">
-        <button class="no"  id="deny">ไม่อนุญาต</button>
-        <button class="yes" id="allow">อนุญาต</button>
-      </div>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="logo">P</div>
+      <div><h1>Smart Parking</h1><small>ช่องจอดว่างแบบเรียลไทม์</small></div>
     </div>
-    <div id="steps">
-      <h2>เปิด flag ตามขั้นตอนนี้</h2>
-      <p id="copied">✅ คัดลอกที่อยู่ให้แล้ว</p>
-      <ol>
-        <li>กดที่ช่องที่อยู่เว็บด้านบน แล้ว <b>วาง</b> แล้วกด Enter<br>
-            <code>chrome://flags/#enable-experimental-web-platform-features</code></li>
-        <li>เปลี่ยนจาก <i>Default</i> เป็น <b>Enabled</b></li>
-        <li>กดปุ่ม <b>Relaunch</b> ด้านล่าง</li>
-        <li>สแกน QR Code อีกครั้ง</li>
-      </ol>
-      <div class="row"><button class="no" id="copyAgain">คัดลอกอีกครั้ง</button></div>
-    </div>
+    <div class="live" id="live"><i></i><span id="liveText">กำลังเชื่อมต่อ</span></div>
+  </header>
+
+  <section class="summary">
+    <div class="label">ช่องจอดว่างทั้งหมด</div>
+    <div class="big"><b id="totalFree">–</b><span id="totalOf">/ – ช่อง</span></div>
+    <div class="bar"><div id="totalBar" style="width:0"></div></div>
+  </section>
+
+  <div class="hint">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+    กรุณาเลือกชั้นจอดเพื่อใช้ระบบนำทาง
   </div>
+
+  <div class="floors" id="floors"></div>
+
+  <div class="legend">
+    <span><i style="background:var(--free)"></i>ว่าง</span>
+    <span><i style="background:var(--taken)"></i>มีรถ</span>
+    <span><i style="background:var(--unknown)"></i>ไม่มีข้อมูล</span>
+  </div>
+  <div class="updated" id="updated"></div>
 </div>
+
+<div class="cta"><button id="go" disabled>เลือกชั้นที่ต้องการจอด</button></div>
+<div class="toast" id="toast"></div>
 
 <script>
 // =================== ตั้งค่า ===================
-// URL ของ Firebase Realtime Database (ไม่มี / ท้าย)
 const FIREBASE_URL = "https://smart-parking-e512d-default-rtdb.asia-southeast1.firebasedatabase.app";
-
-// เส้นทาง: ชื่อ Beacon → { รหัสชั้น: ข้อความที่จะแสดงเมื่อไปชั้นนั้น }
-// Beacon ที่ไม่ได้ระบุชั้นไหนไว้ จะไม่แสดงอะไรเมื่อเลือกชั้นนั้น
-const ROUTES = {
-  "a1": {
-    "F1": { msg: "เลี้ยวขวา",          arrow: "➡️" },
-    "F2": { msg: "ตรงไป ขึ้นทางลาด",   arrow: "⬆️" },
-  },
-  "B2": {
-    "F2": { msg: "เลี้ยวซ้าย",          arrow: "⬅️" },
-  },
-  "B3": {
-    "F1": { msg: "ถึงโซนจอดชั้น 1",     arrow: "🅿️" },
-  },
-};
-
-const RSSI_NEAR = -70;   // แรงกว่านี้ = ถึงจุดเลี้ยว
-const RSSI_FAR  = -80;   // อ่อนกว่านี้ = ผ่านไปแล้ว
-const LOST_MS   = 3000;
-const POLL_MS   = 3000;  // ดึงข้อมูลช่องว่างทุก 3 วินาที
-const FLAG_URL  = "chrome://flags/#enable-experimental-web-platform-features";
+const FLOORS = [                         // ชั้นทั้งหมดในอาคาร (แสดงเสมอ แม้ ESP32 ยังไม่ส่งข้อมูล)
+  { id: "F1", name: "ชั้น 1", slots: 10 },
+  { id: "F2", name: "ชั้น 2", slots: 10 },
+  { id: "F3", name: "ชั้น 3", slots: 10 },
+  { id: "F4", name: "ชั้น 4", slots: 10 },
+  { id: "F5", name: "ชั้น 5", slots: 10 },
+];
+const NAV_PAGE = "nav.html";             // หน้าระบบนำทาง (ส่งชั้นที่เลือกไปเป็น ?floor=F1)
+const LOW_LEFT = 2;                      // เหลือว่างไม่เกินนี้ = "ใกล้เต็ม"
+const STALE_MS = 120000;                 // ESP32 ไม่ส่งข้อมูลเกิน 2 นาที = ออฟไลน์
+const POLL_MS  = 3000;
 // ===============================================
 
 const $ = id => document.getElementById(id);
-const DEBUG = new URLSearchParams(location.search).has('debug');
-const supported = !!(navigator.bluetooth && navigator.bluetooth.requestLEScan);
+const DEMO = new URLSearchParams(location.search).has('demo');   // ?demo = ข้อมูลจำลอง
+let parking = {}, selected = null, online = false;
 
-let parking = {};          // ข้อมูลจาก Firebase
-let selected = null;       // รหัสชั้นที่เลือก เช่น "F1"
-let scanning = false;
-const state = {}, seen = {};
-let current = null;
+// ---------- เวลาอ้างอิง ----------
+// ไม่ใช้นาฬิกามือถือตรง ๆ เพราะถ้านาฬิกามือถือเพี้ยน ESP32 ทุกตัวจะดูเหมือนออฟไลน์
+// ใช้เวลาของ ESP32 ตัวที่ส่งข้อมูลล่าสุด (เวลาจากเซิร์ฟเวอร์ Firebase) เป็นตัวเทียบแทน
+const ALL_DOWN_MS = 600000;              // ทุกตัวเงียบเกิน 10 นาที = ถือว่าระบบล่มทั้งหมด
+function refNow() {
+  let newest = 0;
+  for (const f of FLOORS)
+    for (const u of Object.values((parking[f.id] || {}).units || {})) newest = Math.max(newest, u.t || 0);
+  return newest && Date.now() - newest < ALL_DOWN_MS ? newest : Date.now();
+}
 
-// ---------- ข้อมูลช่องจอด ----------
-async function loadParking() {
+// ---------- อ่านสถานะช่องจอด: 0 ว่าง / 1 มีรถ / null ไม่ทราบ (ออฟไลน์หรือเซนเซอร์เสีย) ----------
+function slotsOf(f, now) {
+  const d = parking[f.id] || {};
+  const arr = new Array(f.slots).fill(null);
+  for (const [k, v] of Object.entries(d.slots || {}))
+    if (+k < f.slots) arr[+k] = (v === 0 || v === 1) ? v : null;   // 2 = เซนเซอร์เสีย
+  for (const u of Object.values(d.units || {}))
+    if (!u.t || now - u.t > STALE_MS)
+      for (let i = u.from; i < u.from + u.count && i < f.slots; i++) arr[i] = null;
+  return arr;
+}
+
+function statusOf(free, known, total) {
+  if (known === 0)    return ['s-none', 'ไม่มีข้อมูล'];
+  if (free === 0)     return ['s-full', 'เต็ม'];
+  if (free <= LOW_LEFT) return ['s-low', 'ใกล้เต็ม'];
+  return ['s-free', 'ว่าง'];
+}
+
+// ---------- วาดหน้าจอ ----------
+function render() {
+  let sumFree = 0, sumTotal = 0, latest = 0;
+  const box = $('floors'), now = refNow();
+  box.innerHTML = '';
+
+  for (const f of FLOORS) {
+    const slots = slotsOf(f, now);
+    const free  = slots.filter(s => s === 0).length;
+    const known = slots.filter(s => s !== null).length;
+    const [cls, label] = statusOf(free, known, f.slots);
+    sumFree += free; sumTotal += f.slots;
+    for (const u of Object.values((parking[f.id] || {}).units || {})) latest = Math.max(latest, u.t || 0);
+
+    const canPick = free > 0;
+    if (selected === f.id && !canPick) { selected = null; toast(`${f.name} เต็มแล้ว กรุณาเลือกชั้นอื่น`); }
+
+    const el = document.createElement('div');
+    el.className = 'floor' + (selected === f.id ? ' selected' : '') + (canPick ? '' : ' disabled');
+    el.innerHTML = `
+      <div class="row">
+        <div class="fname">
+          <div class="badge">${f.id.replace(/\D/g, '')}</div>
+          <div><h2>${f.name}</h2><span class="status ${cls}">${label}</span></div>
+        </div>
+        <div class="count"><b>${free}</b><span> / ${f.slots}</span><small>ช่องว่าง</small></div>
+      </div>
+      <div class="slots">${slots.map((s, i) =>
+        `<div class="slot ${s === 0 ? 'free' : s === 1 ? 'taken' : 'unknown'}">${i + 1}</div>`).join('')}</div>
+      ${known > 0 && known < f.slots ? '<div class="offline">⚠️ เซนเซอร์บางส่วนไม่มีข้อมูล</div>' : ''}`;
+    el.onclick = () => {
+      if (!canPick) return toast(known ? `${f.name} เต็มแล้ว` : `${f.name} ยังไม่มีข้อมูล`);
+      selected = f.id; render();
+    };
+    box.appendChild(el);
+  }
+
+  $('totalFree').textContent = sumFree;
+  $('totalOf').textContent = `/ ${sumTotal} ช่อง`;
+  $('totalBar').style.width = (sumTotal ? sumFree / sumTotal * 100 : 0) + '%';
+  $('updated').textContent = latest ? 'อัปเดตล่าสุด ' + new Date(latest).toLocaleTimeString('th-TH') : '';
+
+  const go = $('go'), sel = FLOORS.find(f => f.id === selected);
+  go.disabled = !sel;
+  go.textContent = sel ? `เริ่มนำทางไป ${sel.name}  →` : 'เลือกชั้นที่ต้องการจอด';
+
+  $('live').classList.toggle('off', !online);
+  $('liveText').textContent = online ? (DEMO ? 'โหมดสาธิต' : 'ออนไลน์') : 'ขาดการเชื่อมต่อ';
+}
+
+$('go').onclick = () => {
+  if (selected) location.href = `${NAV_PAGE}?floor=${encodeURIComponent(selected)}`;
+};
+
+let toastTimer;
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ---------- ดึงข้อมูล ----------
+async function load() {
+  if (DEMO) { demoTick(); online = true; render(); return; }
   try {
-    const r = await fetch(FIREBASE_URL + "/parking.json", { cache: "no-store" });
+    const r = await fetch(FIREBASE_URL + '/parking.json', { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
     parking = (await r.json()) || {};
-    renderFloors();
-    if (parking.updated)
-      $('updated').textContent = 'อัปเดตล่าสุด ' + new Date(parking.updated).toLocaleTimeString('th-TH');
-  } catch (e) {
-    $('floors').textContent = 'โหลดข้อมูลไม่ได้ (ตรวจสอบอินเทอร์เน็ต)';
-  }
-  updateDest();
+    online = true;
+  } catch (e) { online = false; }
+  render();
 }
 
-function floorIds() { return Object.keys(parking).filter(k => parking[k] && parking[k].slots).sort(); }
-function freeCount(id) { return parking[id].slots.filter(s => !s).length; }
-
-function renderFloors() {
-  const ids = floorIds();
-  if (!ids.length) { $('floors').textContent = 'ยังไม่มีข้อมูลจาก ESP32'; return; }
-  $('floors').innerHTML = '';
-  for (const id of ids) {
-    const f = parking[id], free = freeCount(id), total = f.slots.length;
-    const div = document.createElement('div');
-    div.className = 'floor' + (free === 0 ? ' full' : '');
-    div.innerHTML =
-      `<div class="top"><span class="name">${f.name || id}</span>` +
-      `<span class="free">${free === 0 ? 'เต็ม' : 'ว่าง ' + free + '/' + total}</span></div>` +
-      `<div class="dots">${f.slots.map(s => `<div class="dot${s ? ' taken' : ''}"></div>`).join('')}</div>`;
-    if (free > 0) div.onclick = () => chooseFloor(id);
-    $('floors').appendChild(div);
+// ข้อมูลจำลอง ใช้ดูหน้าตาโดยไม่ต้องมีเซนเซอร์ (เปิดด้วย ?demo)
+function demoTick() {
+  for (const f of FLOORS) {
+    const d = parking[f.id] || (parking[f.id] = {
+      slots: Array.from({ length: f.slots }, () => +(Math.random() < 0.6)), units: {} });
+    if (f.id === 'F3') d.slots = d.slots.map(() => 1);                       // ชั้น 3 เต็ม
+    else if (Math.random() < 0.5) { const i = Math.floor(Math.random() * f.slots); d.slots[i] ^= 1; }
+    d.units = { A: { t: Date.now(), from: 0, count: 5 },
+                B: { t: f.id === 'F5' ? 0 : Date.now(), from: 5, count: 5 } };      // ชั้น 5 ตัว B ออฟไลน์
   }
 }
 
-function updateDest() {
-  if (!selected || !parking[selected]) return;
-  const free = freeCount(selected);
-  $('destText').textContent = `ปลายทาง: ${parking[selected].name || selected} (ว่าง ${free})`;
-  $('warn').textContent = free === 0 ? '⚠️ ชั้นนี้เต็มแล้ว กรุณาเปลี่ยนชั้น' : '';
-}
-
-// ---------- เลือกชั้น → นำทาง ----------
-async function chooseFloor(id) {
-  if (!supported) { $('overlay').style.display = 'flex'; return; }
-  selected = id; current = null;
-  if (!scanning) {
-    try {
-      await navigator.bluetooth.requestLEScan({ acceptAllAdvertisements: true, keepRepeatedDevices: true });
-    } catch (e) {
-      alert('เริ่มสแกนไม่ได้: ' + e.message + '\nกรุณาเปิด Bluetooth และ Location แล้วลองใหม่');
-      return;
-    }
-    navigator.bluetooth.addEventListener('advertisementreceived', onAdv);
-    setInterval(update, 300);
-    try { if ('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch (e) {}
-    scanning = true;
-  }
-  $('select').classList.remove('on');
-  $('nav').classList.add('on');
-  updateDest();
-  speak('เริ่มนำทางไป' + (parking[id].name || ''));
-}
-
-$('back').onclick = () => {
-  selected = null; current = null;
-  $('nav').classList.remove('on', 'near');
-  $('select').classList.add('on');
-};
-
-function speak(t) { const u = new SpeechSynthesisUtterance(t); u.lang = 'th-TH'; speechSynthesis.speak(u); }
-
-function onAdv(ev) {
-  const name = ev.device.name || ev.name;
-  if (DEBUG) {
-    const mfr = [];
-    if (ev.manufacturerData) ev.manufacturerData.forEach((dv, k) => {
-      const bytes = [...new Uint8Array(dv.buffer)].map(b => b.toString(16).padStart(2, '0')).join('');
-      mfr.push('0x' + k.toString(16).padStart(4, '0') + ':' + bytes);
-    });
-    seen[ev.device.id] = { name: name || '(ไม่มีชื่อ)', rssi: ev.rssi, mfr, t: Date.now() };
-  }
-  if (!name || !ROUTES[name] || ev.rssi == null) return;
-  const s = state[name] || (state[name] = { avg: ev.rssi, lastSeen: 0 });
-  s.avg = 0.7 * s.avg + 0.3 * ev.rssi;
-  s.lastSeen = Date.now();
-}
-
-function update() {
-  if (!selected) return;
-  const now = Date.now();
-  for (const s of Object.values(state)) if (now - s.lastSeen > LOST_MS) s.avg = -100;
-
-  if (current && state[current].avg < RSSI_FAR) current = null;
-  if (!current) {
-    let best = null;
-    for (const [name, s] of Object.entries(state)) {
-      if (!ROUTES[name][selected]) continue;             // beacon นี้ไม่เกี่ยวกับชั้นที่เลือก
-      if (s.avg > RSSI_NEAR && (!best || s.avg > state[best].avg)) best = name;
-    }
-    if (best) {
-      current = best;
-      speak(ROUTES[best][selected].msg);
-      if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
-    }
-  }
-
-  const step = current ? ROUTES[current][selected] : null;
-  $('nav').classList.toggle('near', !!step);
-  $('arrow').textContent = step ? step.arrow : '⬆️';
-  $('msg').textContent   = step ? step.msg   : 'ตรงไปเรื่อยๆ';
-
-  if (DEBUG) {
-    const list = Object.values(seen).filter(d => now - d.t < 5000)
-      .sort((a, b) => b.rssi - a.rssi).slice(0, 8)
-      .map(d => `${d.rssi} dBm | ${d.name}` + (d.mfr.length ? ' | ' + d.mfr.join(' ') : ''));
-    $('info').textContent = '— โหมดตรวจสอบ —\n' + (list.join('\n') || 'ยังไม่เจออุปกรณ์');
-  }
-}
-
-// ---------- กล่องแจ้งเตือน flag ----------
-async function copyFlag() {
-  try { await navigator.clipboard.writeText(FLAG_URL); }
-  catch (e) {
-    const t = document.createElement('textarea');
-    t.value = FLAG_URL; document.body.appendChild(t); t.select();
-    document.execCommand('copy'); t.remove();
-  }
-}
-$('allow').onclick = async () => { await copyFlag(); $('ask').style.display = 'none'; $('steps').style.display = 'block'; };
-$('copyAgain').onclick = async () => { await copyFlag(); $('copied').textContent = '✅ คัดลอกให้อีกครั้งแล้ว'; };
-$('deny').onclick = () => {
-  window.close();
-  setTimeout(() => {
-    document.body.innerHTML = '<div style="padding:24px"><h2>ยกเลิกการนำทางแล้ว</h2>' +
-      '<p style="color:#aaa">คุณสามารถปิดแท็บนี้ได้เลย</p></div>';
-  }, 300);
-};
-
-if (!supported) $('overlay').style.display = 'flex';
-loadParking();
-setInterval(loadParking, POLL_MS);
+render();
+load();
+setInterval(load, POLL_MS);
 </script>
 </body>
 </html>
